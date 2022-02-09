@@ -1,0 +1,272 @@
+---
+title: "Greece Sales Project"
+author: "Carla F"
+date: "18/04/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, include=TRUE}
+
+library(ggplot2)
+library(plotly)
+library(tidyr)
+library(dplyr)
+library(tidyverse)
+library(scales) 
+library(visdat)
+library(readr)
+library(viridis) #colors
+library(RColorBrewer) #colors
+
+###Import data
+
+larisa <- read_csv("larisa.csv", col_types = cols(X1 = col_integer(), 
+                                container = col_factor(levels = c("glass", "plastic", "can")), 
+                                quantity = col_integer(), 
+                                capacity = col_factor(levels = c("500ml", "1.5lt", "330ml"))))
+names(larisa)[1]='sale_id'
+
+population <- read_csv("population.csv", 
+                       col_types = cols(pop2018 = col_integer(), 
+                                        pop2017 = col_integer(), pop2016 = col_integer(), 
+                                        pop2015 = col_integer(), pop2014 = col_integer(), 
+                                        pop2013 = col_integer(), pop2012 = col_integer()))
+
+sales <- read_csv("sales.csv", col_types = cols(X1 = col_integer(), 
+                                                  container = col_factor(levels = c("glass", "plastic", "can")), 
+                                                  quantity = col_integer(), 
+                                                  capacity = col_factor(levels = c("500ml", "1.5lt", "330ml"))))
+names(sales)[1]='sale_id'
+
+shops <- read_csv("shops.csv")
+
+### Creation of 1 data frame with all sales from all cities by year
+totalsales=rbind.data.frame(larisa,sales)
+
+## Cleaning rows with errors
+totalsales <- totalsales[totalsales$sales >= 0, ]
+totalsales= na.omit(totalsales)
+
+## Fixing Dates
+totalsales$date <- as.Date(totalsales$date,"%Y-%m-%d")
+totalsales$date <- as.numeric(format(totalsales$date,'%Y'))
+
+
+#Sales per brand per shop
+
+shopnames=c(shop_1='Athens',shop_2='Irakleion',shop_3='Athens',
+            shop_4='Thessaloniki',shop_5='Larisa',shop_6='Patra')
+
+salestore= ggplot(totalsales)+
+  geom_point(mapping=aes(x=brand, y=sales, col=brand))+ 
+  facet_wrap( ~ shop,labeller=labeller(shop=shopnames))+
+  xlab(NULL)+ ylab('Sales')+ ggtitle('Sales by Store')+ 
+  scale_colour_discrete('Brands')
+
+
+salestore+ 
+  theme(plot.title = element_text(colour = "dodgerblue4", size = 12, face = "bold"))+
+  theme (axis.title.y = element_text(colour = "darkslateblue"))+
+  theme(legend.title = element_text(color="dodgerblue4"))
+
+
+### City size vs sales per year
+# Creation of subset of data with year, sales and city names of shops
+subsdf=cbind.data.frame(totalsales$date,totalsales$shop,totalsales$sales)
+
+new <- subsdf
+new[] <- shops$city[match(unlist(subsdf), shops$shops)]
+
+newvector=new[,2]
+
+subsdf=cbind.data.frame(subsdf,newvector)
+names(subsdf)=c('Year','Shop','Sales','City')
+
+#Sales per city and year
+
+yearsales= 
+  subsdf %>%
+  group_by(Year) %>%
+  summarise(Sales = round(sum(Sales)/1000000,2))
+
+citysales=  
+  subsdf %>%
+  group_by(City)  %>%
+  summarise(Sales = round(sum(Sales)/1000000,2))
+
+salesgrouped=
+  subsdf %>%
+  group_by(Year, City) %>%
+  summarise(Sales = round(sum(Sales)/1000000,2))
+
+
+#Graph sales in millions per year
+ggplot(yearsales, aes(x=Year, y=Sales, col=Sales))+
+  geom_point(size=5)+
+  xlab(NULL)+ ylab('Sales in Millions')+ ggtitle('Total Sales by Year')+
+  theme(plot.title = element_text(colour = "dodgerblue4", family='TT Arial' ,size = 14, face = "bold"))+
+  theme (axis.title.y = element_text(colour = "darkslateblue", face = "bold"))+
+  theme(legend.title = element_text(color="dodgerblue4", face = "bold"))
+
+
+#Graph sales in millions per store
+ggplot(citysales, aes(x=reorder(City,-Sales), y=Sales, fill=Sales))+
+  geom_bar(stat='identity')+
+  xlab(NULL)+ ylab('Sales in Millions')+ ggtitle('Total Sales by City')+
+  theme(plot.title = element_text(colour = "dodgerblue4", family='TT Arial' ,size = 14, face = "bold"))+
+  theme (axis.title.y = element_text(colour = "darkslateblue", face = "bold"))+
+  theme(legend.title = element_text(color="dodgerblue4", face = "bold"))
+
+
+#Sales per city per year Mode 1
+
+ggplot(salesgrouped)+
+  geom_point(mapping=aes(x=reorder(City,Sales), y=Sales, col=City))+ 
+  facet_wrap( ~ Year)+
+  xlab(NULL)+ ylab('Sales in Millions')+ ggtitle('Total Sales by Year')+
+theme(plot.title = element_text(colour = "dodgerblue4", family='TT Arial' ,size = 14, face = "bold"))+
+  theme (axis.title.y = element_text(colour = "darkslateblue", face = "bold"))+
+  theme(legend.title = element_text(color="dodgerblue4", face = "bold"))
+  
+#Sales per city per year Mode 2
+
+ggplot(salesgrouped)+
+  geom_smooth(mapping=aes(x=Year, y=Sales, col=Year))+ 
+  facet_wrap( ~ City)+
+  xlab(NULL)+ ylab('Sales in Millions')+ ggtitle('Total Sales by Store')+
+  theme(plot.title = element_text(colour = "dodgerblue4", family='TT Arial' ,size = 14, face = "bold"))+
+  theme (axis.title.y = element_text(colour = "darkslateblue", face = "bold"))+
+  theme(legend.title = element_text(color="dodgerblue4", face = "bold"))
+
+
+
+###Population vs sales
+
+sales2018=
+  salesgrouped %>%
+  filter(Year==2018)%>%
+  arrange(City)
+
+population2018=
+  population %>%
+  select(city,pop2018)%>%
+  arrange(city)
+
+popsale=cbind.data.frame(sales2018,population2018)
+
+ggplot(popsale,aes(x=pop2018,y=Sales,col=City),col=City)+
+  geom_point(size=6)+
+  xlab('Population')+ ylab('Sales in Millions')+ ggtitle('Total Sales by Population')+
+  theme(plot.title = element_text(colour = "dodgerblue4", family='TT Arial' ,size = 14, face = "bold"))+
+  theme(axis.title.y = element_text(colour = "darkslateblue", face = "bold"))+
+  theme(axis.title.x = element_text(colour = "darkslateblue", face = "bold"))+
+  theme(legend.title = element_text(color="dodgerblue4", face = "bold"))
+
+
+
+
+### Histogram of Sales
+
+hist(totalsales$sales,main='Sales', xlim=c(0,120000), xlab=NULL, ylab=NULL, border='blue',col='light blue')
+
+
+
+### All Sales Distribution
+
+plotshopsales=totalsales %>% select(shop,sales) %>%
+  group_by(shop) %>%
+  summarise(sales = sum(sales)) 
+
+ggplot(plotshopsales,aes(x='',y=sales))+
+  geom_boxplot(fill='aquamarine4')+
+  coord_cartesian(ylim=c(20000000,60000000))+
+  theme_classic()
+
+
+### All Sales by shop
+plotshopsales$shop=as.factor(plotshopsales$shop)
+
+ggplot(plotshopsales,aes(x=shop,y=sales,fill=shop))+
+  geom_bar(stat='identity')
+
+
+### All Quantities Distribution
+
+plotshopqtty=totalsales %>% select(shop,quantity) %>%
+  group_by(shop) %>%
+  summarise(quantity = sum(quantity)) 
+
+ggplot(plotshopqtty,aes(x='',y=quantity))+
+  geom_boxplot(fill='chartreuse4')+
+  theme_classic()
+
+### All Quantities by shop
+plotshopqtty$shop=as.factor(plotshopqtty$shop)
+
+ggplot(plotshopqtty,aes(x=shop,y=quantity,fill=shop))+
+  geom_bar(stat='identity')
+
+
+
+### Total Sales over years
+datequantity=totalsales %>% select(date,quantity) %>%
+  group_by(date) %>%
+  summarise(quantity = round(sum(quantity)/1000000,2)) 
+
+salesyearplot= ggplot(datequantity,aes(x=date,y=quantity,group=1))+
+  geom_line(col='darkgoldenrod1',size=1)+
+  geom_point(col='darkgoldenrod4',size=3)
+
+salesyearplot +
+  xlab(NULL) + ylab('Quantity Sold in Millions') +
+  ggtitle('Quantities Sold Over Time')+
+  theme(plot.title = element_text(colour = "dodgerblue4", family='TT Arial' ,size = 14, face = "bold"))+
+  theme(axis.title.y = element_text(colour = "darkslateblue", face = "bold"))+
+  theme(axis.title.x = element_text(colour = "darkslateblue", face = "bold"))
+
+
+
+
+
+###Heat map of Quantity sold per brand per shop
+
+totalsales$shop=as.factor(totalsales$shop)
+
+ggplot(totalsales,aes(x=shop,y=brand))+
+  geom_tile(aes(fill=quantity),color='white')+
+  scale_fill_distiller(palette = 'YlOrRd')
+
+###Heat map of Total Sales per brand per shop
+
+totalsales$shop=as.factor(totalsales$shop)
+
+ggplot(totalsales,aes(x=shop,y=brand))+
+  geom_tile(aes(fill=sales),color='white')+
+  scale_fill_distiller(palette = 'Reds')
+
+
+
+
+### Multibar chart
+
+ggplot(totalsales,aes(x=shop,y=sales,fill=brand))+
+  geom_bar(position='dodge',stat='identity')
+
+
+
+### Playing with GGPAIRS
+
+library("GGally")
+ggpairs(totalsales,columns=c(4,6,8),mapping=ggplot2::aes(col=container))+
+  scale_fill_manual(values=c("indianred4", "darkolivegreen",  "palevioletred4")) +
+  scale_color_manual(values=c("indianred4", "darkolivegreen",  "palevioletred4" ))  
+```
+
+
